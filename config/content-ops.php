@@ -1,0 +1,25 @@
+<?php
+
+return [
+    'ai_default_model' => env('AI_DEFAULT_MODEL', 'gpt-4o-mini'),
+    'writing_ai_model' => env('WRITING_AI_MODEL', env('AI_DEFAULT_MODEL', 'gpt-4o-mini')),
+    'ai_provider' => env('AI_PROVIDER', 'openai'),
+    'writing_ai_provider' => env('WRITING_AI_PROVIDER', env('AI_PROVIDER', 'openai')),
+    'review_ai_provider' => env('REVIEW_AI_PROVIDER', env('AI_PROVIDER', 'openai')),
+    'review_ai_model' => env('REVIEW_AI_MODEL', env('AI_DEFAULT_MODEL', 'gpt-4o-mini')),
+    'wp_default_status' => env('WP_DEFAULT_STATUS', 'draft'),
+    'wp_request_timeout' => (int) env('WP_REQUEST_TIMEOUT', 30),
+    'topic_daily_target' => (int) env('TOPIC_DAILY_TARGET', 4),
+    'playwright_enabled' => filter_var(env('PLAYWRIGHT_ENABLED', false), FILTER_VALIDATE_BOOL),
+    'topic_source_timeout' => (int) env('TOPIC_SOURCE_TIMEOUT', 30),
+    'topic_source_connect_timeout' => (int) env('TOPIC_SOURCE_CONNECT_TIMEOUT', 10),
+    'topic_source_max_response_bytes' => (int) env('TOPIC_SOURCE_MAX_RESPONSE_BYTES', 4 * 1024 * 1024),
+    'topic_source_max_attempts' => (int) env('TOPIC_SOURCE_MAX_ATTEMPTS', 3),
+    'knowledge_max_document_bytes' => (int) env('KNOWLEDGE_MAX_DOCUMENT_BYTES', 5 * 1024 * 1024),
+    'knowledge_chunk_max_chars' => (int) env('KNOWLEDGE_CHUNK_MAX_CHARS', 1400),
+    'image_match_min_confidence' => (float) env('IMAGE_MATCH_MIN_CONFIDENCE', 0.46),
+    'image_match_max_body_images' => (int) env('IMAGE_MATCH_MAX_BODY_IMAGES', 4),
+    'default_knowledge_base_ids' => array_values(array_filter(array_map('intval', explode(',', (string) env('DEFAULT_KNOWLEDGE_BASE_IDS', ''))))),
+    'review_pass_threshold' => (int) env('REVIEW_PASS_THRESHOLD', 70),
+    'review_max_revisions' => (int) env('REVIEW_MAX_REVISIONS', 0),
+];
