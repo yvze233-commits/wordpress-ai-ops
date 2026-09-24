@@ -38,10 +38,9 @@ class PublishWordPressDraftJob implements ShouldQueue
         }
         $attempt = ((int) $item->runs()->where('stage', 'wordpress_publish')->max('attempt')) + 1;
         $run = $item->runs()->create(['stage' => 'wordpress_publish', 'attempt' => max(1, $attempt), 'status' => 'running', 'payload' => []]);
-        $remoteStatus = in_array($item->publish_status, ['draft', 'pending', 'publish'], true) ? $item->publish_status : 'draft';
         try {
-            $post = $publisher->publish($item->fresh(), $connection, $remoteStatus);
-            $run->forceFill(['status' => 'succeeded', 'payload' => ['post_id' => $post['id'] ?? null, 'status' => $remoteStatus]])->save();
+            $post = $publisher->publish($item->fresh(), $connection);
+            $run->forceFill(['status' => 'succeeded', 'payload' => ['post_id' => $post['id'] ?? null, 'status' => 'draft']])->save();
         } catch (Throwable $exception) {
             $run->forceFill(['status' => 'failed', 'error_message' => $exception->getMessage(), 'payload' => ['exception' => $exception::class]])->save();
             $fresh = $item->fresh();

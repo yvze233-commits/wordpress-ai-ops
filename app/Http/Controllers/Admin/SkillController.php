@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Domain\Skills\SkillValidator;
-use App\Domain\Skills\SkillCatalog;
 use App\Http\Controllers\Controller;
 use App\Models\Skill;
 use Illuminate\Http\JsonResponse;
@@ -15,7 +14,6 @@ class SkillController extends Controller
 {
     public function index(Request $request): mixed
     {
-        app(SkillCatalog::class)->seedBuiltIns();
         $skills = Skill::query()->with('versions')->orderBy('kind')->orderBy('name')->get();
         if ($request->expectsJson()) {
             return response()->json(['data' => $skills]);

@@ -15,7 +15,6 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withSchedule(function (Schedule $schedule): void {
         $schedule->command('content-ops:create-daily-batch')->dailyAt('02:00')->timezone(config('app.timezone'));
         $schedule->command('content-ops:reconcile-runs')->hourly()->timezone(config('app.timezone'));
-        $schedule->command('content-ops:publish-due')->everyFiveMinutes()->timezone(config('app.timezone'))->withoutOverlapping();
     })
     ->withMiddleware(static function (Middleware $middleware): void {})
     ->withExceptions(static function (Exceptions $exceptions): void {})

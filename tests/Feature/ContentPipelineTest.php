@@ -30,8 +30,6 @@ class ContentPipelineTest extends TestCase
         $fresh = $item->fresh();
         $this->assertSame('approved', $fresh->state);
         $this->assertTrue($fresh->review_result['passed']);
-        $this->assertSame(2, $fresh->review_result['review_stages']);
-        $this->assertArrayHasKey('pass_1', $fresh->review_result['criterion_scores']);
         $this->assertSame(2, ContentRun::query()->count());
     }
 
@@ -73,14 +71,7 @@ class ContentPipelineTest extends TestCase
             'idempotency_key' => uniqid('item-', true),
             'evidence_snapshot' => ['retrieved_at' => now()->toIso8601String(), 'evidence' => []],
             'writing_skill_snapshot' => ['skill_id' => 1, 'version' => 1, 'raw_text' => 'writing-rule-v1'],
-            'review_skill_snapshot' => [
-                'strategy' => 'geoflow_two_pass',
-                'pass_threshold' => 70,
-                'stages' => [
-                    ['skill_id' => 2, 'version' => 1, 'raw_text' => 'review-rule-v1'],
-                    ['skill_id' => 3, 'version' => 1, 'raw_text' => 'review-rule-v2'],
-                ],
-            ],
+            'review_skill_snapshot' => ['skill_id' => 2, 'version' => 1, 'raw_text' => 'review-rule-v1', 'pass_threshold' => 70],
         ]);
     }
 

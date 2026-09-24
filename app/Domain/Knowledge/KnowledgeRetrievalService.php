@@ -23,8 +23,7 @@ final class KnowledgeRetrievalService
                         $query->where('risk_level', '!=', 'high')
                             ->orWhere('review_status', 'reviewed')
                             ->orWhere('review_status', 'approved');
-                    })
-                    ->where('review_status', '!=', 'excluded');
+                    });
             })
             ->limit(500)
             ->get();

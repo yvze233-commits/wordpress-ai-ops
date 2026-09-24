@@ -1,9 +1,11 @@
 <?php
 
 return [
-    'ai_default_provider' => env('AI_DEFAULT_PROVIDER', 'openai'),
-    'review_ai_provider' => env('REVIEW_AI_PROVIDER', env('AI_DEFAULT_PROVIDER', 'openai')),
     'ai_default_model' => env('AI_DEFAULT_MODEL', 'gpt-4o-mini'),
+    'writing_ai_model' => env('WRITING_AI_MODEL', env('AI_DEFAULT_MODEL', 'gpt-4o-mini')),
+    'ai_provider' => env('AI_PROVIDER', 'openai'),
+    'writing_ai_provider' => env('WRITING_AI_PROVIDER', env('AI_PROVIDER', 'openai')),
+    'review_ai_provider' => env('REVIEW_AI_PROVIDER', env('AI_PROVIDER', 'openai')),
     'review_ai_model' => env('REVIEW_AI_MODEL', env('AI_DEFAULT_MODEL', 'gpt-4o-mini')),
     'wp_default_status' => env('WP_DEFAULT_STATUS', 'draft'),
     'wp_request_timeout' => (int) env('WP_REQUEST_TIMEOUT', 30),
@@ -20,8 +22,4 @@ return [
     'default_knowledge_base_ids' => array_values(array_filter(array_map('intval', explode(',', (string) env('DEFAULT_KNOWLEDGE_BASE_IDS', ''))))),
     'review_pass_threshold' => (int) env('REVIEW_PASS_THRESHOLD', 70),
     'review_max_revisions' => (int) env('REVIEW_MAX_REVISIONS', 0),
-    'publish_mode' => env('PUBLISH_MODE', 'draft_only'),
-    'publish_window_start' => env('PUBLISH_WINDOW_START', '08:00'),
-    'publish_window_end' => env('PUBLISH_WINDOW_END', '22:00'),
-    'publish_daily_max' => (int) env('PUBLISH_DAILY_MAX', 0),
 ];

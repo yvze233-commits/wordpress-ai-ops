@@ -23,35 +23,6 @@ final class ArticleGenerationService
         private readonly ContentImageRenderer $renderer,
     ) {}
 
-    /**
-     * Apply an operator's manual edit (title, excerpt, markdown) without any AI call:
-     * re-renders HTML, re-matches images against the new text and refreshes the image plan.
-     */
-    public function rerender(ContentItem $item, string $title, ?string $excerpt, string $markdown): ContentItem
-    {
-        $markdown = trim($markdown);
-        if ($markdown === '') {
-            throw new InvalidArgumentException('Article content cannot be empty.');
-        }
-
-        $category = (string) ($item->generation_meta['category'] ?? '');
-        $scene = (string) ($item->topicCandidate?->summary ?? '');
-        $draft = ContentItemDraft::fromText($title, $markdown, $category, $scene);
-        $plan = $this->images->match($draft, LibraryImage::query()->where('enabled', true)->get());
-        $html = $this->renderer->render(Str::markdown($markdown), $plan, LibraryImage::query()->whereIn('id', $plan->imageIds())->get());
-
-        $item->forceFill([
-            'title' => trim($title),
-            'slug' => Str::slug($title) ?: (string) $item->slug,
-            'excerpt' => filled($excerpt) ? trim($excerpt) : $item->excerpt,
-            'content_html' => $html,
-            'generation_meta' => [...($item->generation_meta ?? []), 'image_plan' => $plan->placements(), 'content_markdown' => $markdown, 'edited_at' => now()->toIso8601String()],
-        ])->save();
-        $this->images->persist($item, $plan);
-
-        return $item->fresh();
-    }
-
     public function generate(ContentItem $item): ContentItem
     {
         $evidence = $this->evidence($item);
@@ -67,7 +38,7 @@ final class ArticleGenerationService
         $matchedPlan = $this->images->match($draft, LibraryImage::query()->where('enabled', true)->get());
         $renderedHtml = $this->renderer->render($html, $matchedPlan, LibraryImage::query()->whereIn('id', $matchedPlan->imageIds())->get());
 
-        return DB::transaction(function () use ($item, $result, $renderedHtml, $evidence, $writingSkill, $matchedPlan, $prompt, $markdown): ContentItem {
+        return DB::transaction(function () use ($item, $result, $renderedHtml, $evidence, $writingSkill, $matchedPlan, $prompt): ContentItem {
             $item->forceFill([
                 'title' => trim((string) $result['title']),
                 'slug' => trim((string) $result['slug']) ?: Str::slug((string) $result['title']),
@@ -81,7 +52,6 @@ final class ArticleGenerationService
                     'source_links' => array_values(array_filter((array) $result['source_links'], 'is_string')),
                     'claims' => array_values(array_filter((array) $result['claims'], 'is_string')),
                     'image_plan' => $matchedPlan->placements(),
-                    'content_markdown' => $markdown,
                     'prompt_hash' => hash('sha256', $prompt),
                     'generated_at' => now()->toIso8601String(),
                 ],
@@ -112,7 +82,7 @@ final class ArticleGenerationService
             'slug' => trim((string) $result['slug']) ?: Str::slug((string) $result['title']),
             'excerpt' => trim((string) $result['excerpt']),
             'content_html' => $html,
-            'generation_meta' => [...($item->generation_meta ?? []), 'image_plan' => $plan->placements(), 'content_markdown' => $markdown, 'revision_at' => now()->toIso8601String()],
+            'generation_meta' => [...($item->generation_meta ?? []), 'image_plan' => $plan->placements(), 'revision_at' => now()->toIso8601String()],
         ])->save();
         $this->images->persist($item, $plan);
 

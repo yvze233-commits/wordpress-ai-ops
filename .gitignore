@@ -27,8 +27,6 @@ __pycache__/
 /storage/*.key
 /storage/pail
 /vendor
-*.sqlite
-*.sqlite-*
 /composer.phar
 Homestead.json
 Homestead.yaml

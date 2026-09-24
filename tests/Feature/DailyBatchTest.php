@@ -35,10 +35,6 @@ class DailyBatchTest extends TestCase
         $this->assertSame(4, $first->fresh()->contentItems()->where('state', 'locked')->count());
         $this->assertSame(4, $first->fresh()->dailySelections()->pluck('topic_candidate_id')->unique()->count());
         $this->assertSame(4, ContentItem::query()->count());
-        $item = ContentItem::query()->firstOrFail();
-        $this->assertSame('GEOFlow 印象文生成', $item->writing_skill_snapshot['name']);
-        $this->assertSame('geoflow_two_pass', $item->review_skill_snapshot['strategy']);
-        $this->assertCount(2, $item->review_skill_snapshot['stages']);
     }
 
     public function test_daily_batch_marks_a_shortfall_when_only_two_candidates_exist(): void

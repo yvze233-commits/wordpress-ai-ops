@@ -46,9 +46,6 @@ class ReviewContentItemJob implements ShouldQueue
                     $run->forceFill(['status' => 'succeeded', 'payload' => ['passed' => true, 'score' => $result['score'], 'revisions' => $revisionCount]])->save();
                     $this->transition($item->fresh(), ContentState::APPROVED);
                     $item->fresh()->auditEvents()->create(['event_type' => 'content_review_passed', 'payload' => ['run_id' => $run->id, 'score' => $result['score'], 'revisions' => $revisionCount]]);
-                    if (config('content-ops.publish_mode') === 'auto_publish') {
-                        app(\App\Domain\Content\PublishScheduler::class)->schedule($item->fresh(), 'publish');
-                    }
 
                     break;
                 }
