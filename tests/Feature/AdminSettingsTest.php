@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Domain\Content\AiProviderCatalog;
+use App\Models\AiConnection;
 use App\Models\SystemSetting;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -11,209 +13,152 @@ class AdminSettingsTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_settings_page_returns_runtime_configuration_without_exposing_secrets(): void
+    public function test_settings_page_exposes_two_role_cards_without_exposing_secrets(): void
     {
-        SystemSetting::setValue('ai_api_key', 'secret-key');
-        SystemSetting::setValue('wordpress_application_password', 'secret-password');
-        SystemSetting::setValue('topic_daily_target', 6);
+        AiConnection::create([
+            'name' => 'DeepSeek 主账号',
+            'provider' => 'deepseek',
+            'base_url' => 'https://api.deepseek.com/v1',
+            'api_key_encrypted' => 'secret-key',
+        ]);
 
         $this->get('/admin/settings')
             ->assertOk()
-            ->assertSee('已配置')
-            ->assertSee('6')
+            ->assertSee('生成 AI')
+            ->assertSee('审核 AI')
+            ->assertSee('获取模型')
             ->assertDontSee('secret-key')
-            ->assertDontSee('secret-password');
+            ->assertDontSee('<input name="writing_ai_model"');
     }
 
-    public function test_settings_page_lists_supported_providers(): void
+    public function test_operator_can_configure_a_provider_once_and_assign_different_connections_to_tasks(): void
     {
-        $this->get('/admin/settings')
-            ->assertOk()
-            ->assertSee('DeepSeek')
-            ->assertSee('豆包（火山方舟）')
-            ->assertSee('中转站')
-            ->assertSee('测试连接')
-            ->assertSee('获取模型列表');
-    }
-
-    public function test_browser_can_save_settings_and_runtime_config_uses_database_value(): void
-    {
-        $this->post('/admin/settings', [
-            'writing_ai_provider' => 'openai',
-            'writing_ai_model' => 'gpt-5-mini',
-            'review_ai_provider' => 'openai',
-            'review_ai_model' => 'gpt-5-mini',
-            'ai_api_key_openai' => 'new-secret',
-            'topic_daily_target' => 5,
-            'review_pass_threshold' => 82,
-            'publish_mode' => 'draft_only',
-            'publish_window_start' => '08:00',
-            'publish_window_end' => '22:00',
-            'publish_daily_max' => 0,
-            'wp_default_status' => 'draft',
-            'playwright_enabled' => '1',
+        $this->post('/admin/settings/connections', [
+            'name' => 'GPT 内容账号',
+            'provider' => 'openai',
+            'base_url' => 'https://api.openai.com/v1',
+            'api_key' => 'gpt-secret',
         ])->assertRedirect('/admin/settings');
 
-        $this->assertSame('gpt-5-mini', config('content-ops.ai_default_model'));
-        $this->assertSame('gpt-5-mini', config('content-ops.review_ai_model'));
-        $this->assertSame('openai', config('content-ops.ai_default_provider'));
-        $this->assertSame(5, config('content-ops.topic_daily_target'));
-        $this->assertSame(82, config('content-ops.review_pass_threshold'));
-        $this->assertTrue(config('content-ops.playwright_enabled'));
-        $this->assertSame('new-secret', SystemSetting::value('ai_api_key_openai'));
-        $this->assertSame('new-secret', config('ai.providers.openai.key'));
+        $gpt = AiConnection::query()->firstOrFail();
+        $this->post('/admin/settings/connections', [
+            'name' => 'DeepSeek 审核账号',
+            'provider' => 'deepseek',
+            'base_url' => 'https://api.deepseek.com/v1',
+            'api_key' => 'deepseek-secret',
+        ])->assertRedirect('/admin/settings');
+        $deepseek = AiConnection::query()->where('provider', 'deepseek')->firstOrFail();
+
+        $this->post('/admin/settings/routing', [
+            'writing_connection_id' => $gpt->id,
+            'writing_model' => 'gpt-4o-mini',
+            'review_connection_id' => $deepseek->id,
+            'review_model' => 'deepseek-chat',
+        ])->assertRedirect('/admin/settings');
+
+        $this->assertSame($gpt->id, (int) SystemSetting::value('writing_ai_connection_id'));
+        $this->assertSame($deepseek->id, (int) SystemSetting::value('review_ai_connection_id'));
+        $this->assertSame('gpt-4o-mini', config('content-ops.ai_default_model'));
+        $this->assertSame('gpt-4o-mini', config('content-ops.writing_ai_model'));
+        $this->assertSame('deepseek-chat', config('content-ops.review_ai_model'));
+        $this->assertSame('openai', config('content-ops.ai_provider'));
+        $this->assertSame('deepseek', config('content-ops.review_ai_provider'));
+        $this->assertSame('gpt-secret', $gpt->fresh()->api_key_encrypted);
+        $this->assertSame('deepseek-secret', $deepseek->fresh()->api_key_encrypted);
     }
 
-    public function test_provider_keys_and_base_urls_are_saved_encrypted_and_applied(): void
+    public function test_unknown_model_cannot_be_assigned_to_a_provider(): void
     {
+        $connection = AiConnection::create(['name' => 'GPT', 'provider' => 'openai', 'api_key_encrypted' => 'secret']);
+
+        $this->from('/admin/settings')->post('/admin/settings/routing', [
+            'writing_connection_id' => $connection->id,
+            'writing_model' => 'made-up-model',
+            'review_connection_id' => $connection->id,
+            'review_model' => array_key_first(AiProviderCatalog::models('openai')),
+        ])->assertRedirect('/admin/settings')
+            ->assertSessionHasErrors('writing_model');
+    }
+
+    public function test_role_cards_return_provider_models_and_save_generation_and_review_separately(): void
+    {
+        Http::fake(function ($request) {
+            if (str_contains($request->url(), 'openai.com')) {
+                return Http::response(['data' => [['id' => 'gpt-4o-mini', 'name' => 'GPT-4o mini']]]);
+            }
+            if (str_contains($request->url(), 'deepseek.com')) {
+                return Http::response(['data' => [['id' => 'deepseek-chat', 'name' => 'DeepSeek Chat']]]);
+            }
+
+            return Http::response([], 404);
+        });
+
+        $this->get('/admin/settings/models?provider=openai')->assertStatus(405);
+
+        $this->post('/admin/settings/ai-role', [
+            'role' => 'writing',
+            'provider' => 'openai',
+            'base_url' => 'https://api.openai.com/v1',
+            'api_key' => 'gpt-secret',
+            'model' => 'gpt-4o-mini',
+        ])->assertRedirect('/admin/settings');
+
+        $this->post('/admin/settings/ai-role', [
+            'role' => 'review',
+            'provider' => 'deepseek',
+            'base_url' => 'https://api.deepseek.com/v1',
+            'api_key' => 'deepseek-secret',
+            'model' => 'deepseek-chat',
+        ])->assertRedirect('/admin/settings');
+
+        $this->assertSame('openai', AiConnection::find(SystemSetting::value('writing_ai_connection_id'))->provider);
+        $this->assertSame('deepseek', AiConnection::find(SystemSetting::value('review_ai_connection_id'))->provider);
+        $this->assertSame('gpt-4o-mini', SystemSetting::value('writing_ai_model'));
+        $this->assertSame('deepseek-chat', SystemSetting::value('review_ai_model'));
+    }
+
+    public function test_model_fetch_uses_the_submitted_provider_credentials_and_remote_ids(): void
+    {
+        Http::fake(['https://api.deepseek.com/v1/models' => Http::response(['data' => [
+            ['id' => 'deepseek-chat-2026-01', 'name' => 'DeepSeek Chat 2026'],
+        ]])]);
+
+        $this->postJson('/admin/settings/models', [
+            'provider' => 'deepseek',
+            'base_url' => 'https://api.deepseek.com/v1',
+            'api_key' => 'deepseek-real-key',
+        ])->assertOk()
+            ->assertJsonPath('source', 'remote')
+            ->assertJsonPath('models.deepseek-chat-2026-01', 'DeepSeek Chat 2026');
+
+        Http::assertSent(fn ($request): bool => $request->url() === 'https://api.deepseek.com/v1/models'
+            && $request->header('Authorization')[0] === 'Bearer deepseek-real-key');
+    }
+
+    public function test_wrong_credentials_fail_model_fetch_without_returning_preset_models(): void
+    {
+        Http::fake(['https://api.deepseek.com/v1/models' => Http::response(['error' => 'invalid'], 401)]);
+
+        $this->postJson('/admin/settings/models', [
+            'provider' => 'deepseek',
+            'base_url' => 'https://api.deepseek.com/v1',
+            'api_key' => 'gpt-key-used-by-mistake',
+        ])->assertStatus(422)
+            ->assertJsonPath('code', 'authentication_failed')
+            ->assertJsonMissingPath('models');
+    }
+
+    public function test_writing_skill_can_be_selected_from_preset_catalog(): void
+    {
+        $this->get('/admin/settings')->assertOk()->assertSee('GEOFlow 印象文生成')->assertSee('GEOFlow 榜单文生成');
+
         $this->post('/admin/settings', [
-            'writing_ai_provider' => 'deepseek',
-            'writing_ai_model' => 'deepseek-chat',
-            'review_ai_provider' => 'relay',
-            'review_ai_model' => 'gpt-4o-mini',
-            'ai_api_key_deepseek' => 'sk-deepseek-secret',
-            'ai_api_key_relay' => 'sk-relay-secret',
-            'ai_base_url_relay' => 'https://relay.example.com/v1/',
             'topic_daily_target' => 4,
             'review_pass_threshold' => 70,
-            'publish_mode' => 'draft_only',
-            'publish_window_start' => '08:00',
-            'publish_window_end' => '22:00',
-            'publish_daily_max' => 0,
+            'writing_skill_slug' => 'geoflow_ranking_article',
             'wp_default_status' => 'draft',
         ])->assertRedirect('/admin/settings');
 
-        $this->assertSame('deepseek-chat', config('content-ops.ai_default_model'));
-        $this->assertSame('deepseek', config('content-ops.ai_default_provider'));
-        $this->assertSame('relay', config('content-ops.review_ai_provider'));
-
-        $this->assertSame('sk-deepseek-secret', SystemSetting::value('ai_api_key_deepseek'));
-        $this->assertSame('sk-relay-secret', SystemSetting::value('ai_api_key_relay'));
-        $this->assertNotSame('sk-deepseek-secret', SystemSetting::query()->where('key', 'ai_api_key_deepseek')->value('value'));
-
-        $this->assertSame('sk-deepseek-secret', config('ai.providers.deepseek.key'));
-        $this->assertSame('sk-relay-secret', config('ai.providers.relay.key'));
-        $this->assertSame('https://relay.example.com/v1', config('ai.providers.relay.url'));
-    }
-
-    public function test_legacy_shared_openai_key_still_applies_when_no_provider_key_saved(): void
-    {
-        SystemSetting::setValue('ai_api_key', 'legacy-key');
-        SystemSetting::applyToConfig();
-
-        $this->assertSame('legacy-key', config('ai.providers.openai.key'));
-    }
-
-    public function test_model_list_endpoint_returns_sorted_model_ids(): void
-    {
-        SystemSetting::setValue('ai_api_key_deepseek', 'sk-test');
-
-        Http::fake([
-            'https://api.deepseek.com/v1/models' => Http::response([
-                'data' => [['id' => 'deepseek-reasoner'], ['id' => 'deepseek-chat']],
-            ]),
-        ]);
-
-        $this->getJson('/admin/settings/ai/deepseek/models')
-            ->assertOk()
-            ->assertJsonPath('data.ok', true)
-            ->assertJsonPath('data.models', ['deepseek-chat', 'deepseek-reasoner']);
-    }
-
-    public function test_model_list_endpoint_reports_auth_failure(): void
-    {
-        SystemSetting::setValue('ai_api_key_deepseek', 'sk-bad');
-
-        Http::fake(['https://api.deepseek.com/v1/models' => Http::response(['error' => ['message' => 'Invalid key']], 401)]);
-
-        $this->getJson('/admin/settings/ai/deepseek/models')
-            ->assertStatus(422)
-            ->assertJsonPath('data.ok', false)
-            ->assertJsonPath('data.category', 'auth')
-            ->assertJsonPath('data.message', fn (string $message) => str_contains($message, '认证失败'));
-    }
-
-    public function test_provider_test_endpoint_requires_a_key_before_calling_out(): void
-    {
-        Http::fake();
-
-        $this->postJson('/admin/settings/ai/relay/test')
-            ->assertStatus(422)
-            ->assertJsonPath('data.category', 'missing_url');
-
-        SystemSetting::setValue('ai_base_url_relay', 'https://relay.example.com/v1');
-        $this->postJson('/admin/settings/ai/relay/test')
-            ->assertStatus(422)
-            ->assertJsonPath('data.category', 'missing_key');
-
-        $this->postJson('/admin/settings/ai/unknown-provider/test')->assertStatus(404);
-        Http::assertNothingSent();
-    }
-
-    public function test_provider_test_endpoint_persists_last_result(): void
-    {
-        SystemSetting::setValue('ai_api_key_doubao', 'sk-doubao');
-        Http::fake(['https://ark.cn-beijing.volces.com/api/v3/models' => Http::response(['data' => [['id' => 'doubao-seed-1-6-250615']]])]);
-
-        $this->postJson('/admin/settings/ai/doubao/test')
-            ->assertOk()
-            ->assertJsonPath('data.ok', true);
-
-        $last = SystemSetting::value('ai_test_result_doubao');
-        $this->assertNotNull($last);
-        $this->assertTrue(json_decode((string) $last, true)['ok']);
-
-        $this->get('/admin/settings')->assertOk()->assertSee('上次测试成功');
-    }
-
-    public function test_wordpress_test_endpoint_validates_saved_connection_and_records_health(): void
-    {
-        SystemSetting::setValue('wordpress_application_password', 'saved-app-password');
-        $connection = \App\Models\WordPressConnection::query()->create([
-            'name' => '主站点',
-            'base_url' => 'https://example.test',
-            'username' => 'ops',
-            'application_password_encrypted' => 'saved-app-password',
-            'default_post_status' => 'draft',
-            'status' => 'inactive',
-        ]);
-
-        Http::fake([
-            'https://example.test/wp-json/wp/v2/users/me*' => Http::response(['id' => 1, 'name' => 'ops']),
-        ]);
-
-        $this->postJson('/admin/settings/wordpress/test')
-            ->assertOk()
-            ->assertJsonPath('data.ok', true)
-            ->assertJsonPath('data.message', fn (string $message) => str_contains($message, '连接成功'));
-
-        $connection->refresh();
-        $this->assertSame('active', $connection->status);
-        $this->assertNotNull($connection->last_health_checked_at);
-        $this->assertNull($connection->last_error);
-    }
-
-    public function test_wordpress_test_endpoint_reports_auth_failure_without_saving(): void
-    {
-        \App\Models\WordPressConnection::query()->create([
-            'name' => '主站点',
-            'base_url' => 'https://example.test',
-            'username' => 'ops',
-            'application_password_encrypted' => 'saved-app-password',
-            'default_post_status' => 'draft',
-            'status' => 'active',
-        ]);
-
-        Http::fake(['https://example.test/wp-json/wp/v2/users/me*' => Http::response(['code' => 'invalid_username_or_password'], 401)]);
-
-        $this->postJson('/admin/settings/wordpress/test')
-            ->assertStatus(422)
-            ->assertJsonPath('data.ok', false)
-            ->assertJsonPath('data.category', 'auth');
-
-        $connection = \App\Models\WordPressConnection::query()->oldest('id')->first();
-        $this->assertSame('active', $connection->status);
-        $this->assertNotNull($connection->last_health_checked_at);
-        $this->assertNotNull($connection->last_error);
+        $this->assertSame('geoflow_ranking_article', SystemSetting::value('writing_skill_slug'));
     }
 }
