@@ -11,23 +11,27 @@ final class LaravelAiGateway implements StructuredAiGateway
 {
     public function generate(string $prompt, array $schema): array
     {
-        return $this->prompt($prompt, $schema, config('content-ops.writing_ai_provider', config('content-ops.ai_provider', 'openai')), config('content-ops.writing_ai_model', config('content-ops.ai_default_model')));
+        return $this->prompt($prompt, $schema, config('content-ops.ai_default_provider'), config('content-ops.ai_default_model'));
     }
 
     public function review(string $prompt, array $schema): array
     {
-        return $this->prompt($prompt, $schema, config('content-ops.review_ai_provider', config('content-ops.ai_provider', 'openai')), config('content-ops.review_ai_model'));
+        return $this->prompt($prompt, $schema, config('content-ops.review_ai_provider'), config('content-ops.review_ai_model'));
     }
 
     /** @return array<string, mixed> */
-    private function prompt(string $prompt, array $schema, ?string $provider = null, ?string $model = null): array
+    private function prompt(string $prompt, array $schema, mixed $provider = null, mixed $model = null): array
     {
         $response = agent(
             instructions: 'Return only the requested structured JSON. Do not invent evidence or source links.',
             schema: fn (JsonSchema $jsonSchema): array => [
                 'result' => $jsonSchema::fromArray($schema),
             ],
-        )->prompt($prompt, provider: $provider ?: config('content-ops.ai_provider', 'openai'), model: $model ?: config('content-ops.ai_default_model'));
+        )->prompt(
+            $prompt,
+            provider: filled($provider) ? (string) $provider : null,
+            model: filled($model) ? (string) $model : null,
+        );
 
         $structured = $response->structured ?? null;
         if (isset($structured['result']) && is_array($structured['result'])) {

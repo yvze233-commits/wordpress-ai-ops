@@ -115,6 +115,15 @@
         .settings-grid-compact { margin-top: 19px; }
         .settings-section { min-width: 0; }
         .ai-workspace { margin-bottom: 19px; }
+        .ai-role-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 19px; }
+        .ai-role-card { min-width: 0; }
+        .role-card-header { min-height: 116px; align-items: flex-start; }
+        .role-card-header h2 { font-size: 20px; }
+        .role-form { display: grid; gap: 15px; }
+        .model-picker { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 9px; }
+        .fetch-models { min-height: 38px; white-space: nowrap; }
+        .role-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-top: 2px; }
+        .model-status { color: var(--muted); font-size: 11px; }
         .ai-workspace-heading { align-items: flex-start; }
         .ai-workspace-heading h2 { margin-bottom: 4px; font-size: 20px; }
         .routing-panel { margin-top: 19px; }
@@ -146,15 +155,16 @@
         .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 17px; }
         label { display: grid; gap: 7px; color: var(--ink); font-size: 13px; font-weight: 650; }
         label small { color: var(--muted); font-size: 11px; font-weight: 400; }
-        input, select { width: 100%; min-height: 38px; padding: 0 11px; color: var(--ink); background: #f8faf9; border: 1px solid #d9e3e1; border-radius: 5px; outline: none; }
-        input:focus, select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px #dff3ee; }
+        input, select, textarea { width: 100%; min-height: 38px; padding: 0 11px; color: var(--ink); background: #f8faf9; border: 1px solid #d9e3e1; border-radius: 5px; outline: none; }
+        textarea { padding: 9px 11px; resize: vertical; font: inherit; line-height: 1.6; }
+        input:focus, select:focus, textarea:focus { border-color: var(--teal); box-shadow: 0 0 0 3px #dff3ee; }
         .check-field { display: flex; align-items: flex-start; gap: 9px; padding-top: 28px; }
         .check-field input { width: 17px; min-height: 17px; margin-top: 2px; accent-color: var(--teal); }
         .check-field span { display: grid; gap: 3px; }
         .settings-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 19px; }
         .actions { display: flex; flex-wrap: wrap; gap: 8px; }
         .pagination { margin-top: 18px; }
-        @media (max-width: 1050px) { .sidebar { width: 190px; flex-basis: 190px; } .content { padding: 25px 22px 45px; } .topbar { padding: 0 22px; } .workspace-grid, .settings-grid, .ai-connection-grid, .connection-form { grid-template-columns: 1fr; } }
+        @media (max-width: 1050px) { .sidebar { width: 190px; flex-basis: 190px; } .content { padding: 25px 22px 45px; } .topbar { padding: 0 22px; } .workspace-grid, .settings-grid, .ai-role-grid, .ai-connection-grid, .connection-form { grid-template-columns: 1fr; } }
         @media (max-width: 720px) { .app-shell { display: block; } .sidebar { width: auto; padding: 12px 13px; } .brand { padding: 3px 8px 12px; } .nav-label, .sidebar-note { display: none; } .nav { grid-template-columns: repeat(5, minmax(0, 1fr)); margin: 0; gap: 3px; } .nav a { justify-content: center; min-height: 34px; padding: 0 5px; font-size: 0; } .nav-icon { font-size: 15px; } .topbar { height: 55px; padding: 0 16px; } .topbar-right span { display: none; } .content { padding: 22px 15px 35px; } .page-heading { display: block; } .page-heading .button { margin-top: 15px; } h1 { font-size: 23px; } .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .pipeline { grid-template-columns: repeat(2, minmax(0, 1fr)); } .pipeline-step:not(:last-child)::after { display: none; } .panel-body, .panel-header { padding: 16px; } .article { padding: 20px; } .form-grid, .task-row, .connection-row { grid-template-columns: 1fr; } .connection-head { display: none; } .task-mark { display: none; } .check-field { padding-top: 0; } }
     </style>
 </head>

@@ -74,15 +74,63 @@ final class KnowledgeIngestionService
         $this->assertSafeName($name);
 
         $extension = strtolower((string) $file->getClientOriginalExtension());
-        if (! in_array($extension, ['txt', 'md', 'markdown'], true)) {
-            throw new InvalidArgumentException('Only TXT and Markdown files can be ingested as text.');
-        }
+        $text = match (true) {
+            in_array($extension, ['txt', 'md', 'markdown'], true) => (string) file_get_contents($file->getRealPath()),
+            $extension === 'docx' => $this->extractDocxText($file),
+            default => throw new InvalidArgumentException('Only TXT, Markdown and DOCX files can be ingested.'),
+        };
 
-        return $this->ingestText($knowledgeBase, (string) file_get_contents($file->getRealPath()), [
+        return $this->ingestText($knowledgeBase, $text, [
             ...$metadata,
             'name' => $name,
-            'source_type' => $metadata['source_type'] ?? $extension,
+            'source_type' => $metadata['source_type'] ?? $this->sourceType($name),
         ]);
+    }
+
+    /**
+     * Extract plain paragraphs from a .docx (a zip of XML parts) without external dependencies.
+     */
+    private function extractDocxText(UploadedFile $file): string
+    {
+        if (! class_exists('\ZipArchive')) {
+            throw new InvalidArgumentException('The PHP zip extension is required to read DOCX files.');
+        }
+
+        $maxBytes = (int) config('content-ops.knowledge_max_document_bytes', 5 * 1024 * 1024);
+        if (filesize((string) $file->getRealPath()) > $maxBytes * 2) {
+            throw new InvalidArgumentException('DOCX file is too large.');
+        }
+
+        $zip = new \ZipArchive;
+        if (($code = $zip->open((string) $file->getRealPath())) !== true) {
+            throw new InvalidArgumentException('DOCX file could not be opened (code '.$code.').');
+        }
+
+        $xml = $zip->getFromName('word/document.xml');
+        $zip->close();
+        if ($xml === false) {
+            throw new InvalidArgumentException('DOCX file does not contain a readable document body.');
+        }
+        if (strlen((string) $xml) > $maxBytes * 4) {
+            throw new InvalidArgumentException('DOCX document body is too large.');
+        }
+
+        $paragraphs = [];
+        if (preg_match_all('#<w:p[ >].*?</w:p>#s', (string) $xml, $matches)) {
+            foreach ($matches[0] as $paragraph) {
+                $text = html_entity_decode(strip_tags((string) preg_replace('#<w:tab[^>]*/>#', "\t", $paragraph)), ENT_QUOTES | ENT_XML1, 'UTF-8');
+                $text = trim(preg_replace('/[ \t]+/u', ' ', $text) ?? '');
+                if ($text !== '') {
+                    $paragraphs[] = $text;
+                }
+            }
+        }
+
+        if ($paragraphs === []) {
+            throw new InvalidArgumentException('DOCX file does not contain extractable text.');
+        }
+
+        return implode("\n\n", $paragraphs);
     }
 
     private function normalize(string $text): string
@@ -148,6 +196,7 @@ final class KnowledgeIngestionService
     {
         return match (strtolower((string) pathinfo($name, PATHINFO_EXTENSION))) {
             'md', 'markdown' => 'markdown',
+            'docx' => 'word',
             default => 'text',
         };
     }

@@ -3,6 +3,7 @@
 namespace App\Domain\Topics;
 
 use App\Domain\Content\IdempotencyKey;
+use App\Domain\Skills\SkillCatalog;
 use App\Models\ContentBatch;
 use App\Models\ContentItem;
 use App\Models\DailySelection;
@@ -16,6 +17,7 @@ final class TopicSelectionService
     public function __construct(
         private readonly DuplicateDetector $duplicates = new DuplicateDetector,
         private readonly TopicLockService $locks = new TopicLockService,
+        private readonly SkillCatalog $skills = new SkillCatalog,
     ) {}
 
     public function selectForBatch(ContentBatch $batch, int $limit): Collection
@@ -83,6 +85,7 @@ final class TopicSelectionService
     {
         DB::transaction(function () use ($batch, $candidate, $score): void {
             $titleEntry = $this->titleEntry($candidate);
+            $skillSnapshots = $this->skills->snapshotsForNewContent();
             $contentItem = ContentItem::query()->firstOrCreate(
                 ['idempotency_key' => IdempotencyKey::forTopic($candidate->id, 'batch:'.$batch->id, 0)],
                 [
@@ -90,6 +93,8 @@ final class TopicSelectionService
                     'topic_candidate_id' => $candidate->id,
                     'title' => $candidate->title,
                     'state' => 'locked',
+                    'writing_skill_snapshot' => $skillSnapshots['writing'],
+                    'review_skill_snapshot' => $skillSnapshots['review'],
                 ],
             );
 

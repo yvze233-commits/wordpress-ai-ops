@@ -5,6 +5,7 @@ namespace App\Domain\Media;
 use App\Models\ImageLibrary;
 use App\Models\LibraryImage;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 
 final class ImageIngestionService
@@ -40,7 +41,7 @@ final class ImageIngestionService
             throw new InvalidArgumentException('Only enabled libraries and supported image MIME types are allowed.');
         }
 
-        $dimensions = is_file($path) ? @getimagesize($path) : false;
+        $dimensions = $this->dimensions($path);
         $notes = array_key_exists('notes', $metadata) ? (string) $metadata['notes'] : null;
 
         return $library->images()->create([
@@ -58,6 +59,26 @@ final class ImageIngestionService
             'ocr_text' => $metadata['ocr_text'] ?? null,
             'enabled' => $metadata['enabled'] ?? true,
         ]);
+    }
+
+    /**
+     * Resolve image dimensions whether $path is absolute (import) or a disk-relative
+     * path (ingestFile after store()).
+     *
+     * @return array<int,int>|false
+     */
+    private function dimensions(string $path): array|false
+    {
+        if (is_file($path)) {
+            return @getimagesize($path);
+        }
+
+        $disk = Storage::disk(config('filesystems.default', 'local'));
+        if ($disk->exists($path)) {
+            return @getimagesize($disk->path($path));
+        }
+
+        return false;
     }
 
     /** @return list<string> */
