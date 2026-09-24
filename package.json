@@ -1,0 +1,9 @@
+{
+  "private": true,
+  "scripts": {
+    "test:browser": "playwright test playwright/wordpress-draft-publisher.spec.ts"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.52.0"
+  }
+}
