@@ -6,6 +6,8 @@ use App\Domain\Content\ArticleGenerationService;
 use App\Domain\Content\ArticleReviewService;
 use App\Domain\Content\ContentState;
 use App\Domain\Content\ContentStateTransition;
+use App\Models\WordPressConnection;
+use App\Jobs\PublishWordPressDraftJob;
 use App\Models\ContentItem;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -45,7 +47,21 @@ class ReviewContentItemJob implements ShouldQueue
                 if ($result['passed']) {
                     $run->forceFill(['status' => 'succeeded', 'payload' => ['passed' => true, 'score' => $result['score'], 'revisions' => $revisionCount]])->save();
                     $this->transition($item->fresh(), ContentState::APPROVED);
-                    $item->fresh()->auditEvents()->create(['event_type' => 'content_review_passed', 'payload' => ['run_id' => $run->id, 'score' => $result['score'], 'revisions' => $revisionCount]]);
+                    $approved = $item->fresh(['batch.task']);
+                    $approved->auditEvents()->create(['event_type' => 'content_review_passed', 'payload' => ['run_id' => $run->id, 'score' => $result['score'], 'revisions' => $revisionCount]]);
+                    $publishStatus = $approved->batch?->task?->publish_status;
+                    $taskConnectionId = $approved->batch?->task?->wordpress_connection_id;
+                    $connection = in_array($publishStatus, ['draft', 'pending', 'publish'], true)
+                        ? ($taskConnectionId
+                            ? WordPressConnection::query()->whereKey($taskConnectionId)->whereIn('status', ['active', 'healthy'])->first()
+                            : WordPressConnection::query()->whereIn('status', ['active', 'healthy'])->orderBy('id')->first())
+                        : null;
+                    if ($connection !== null) {
+                        PublishWordPressDraftJob::dispatch($approved->id, $connection->id);
+                        $approved->auditEvents()->create(['event_type' => 'wordpress_publish_queued', 'payload' => ['connection_id' => $connection->id, 'status' => $publishStatus]]);
+                    } elseif (in_array($publishStatus, ['draft', 'pending', 'publish'], true)) {
+                        $approved->auditEvents()->create(['event_type' => 'wordpress_publish_unavailable', 'payload' => ['status' => $publishStatus, 'reason' => 'no_active_connection']]);
+                    }
 
                     break;
                 }

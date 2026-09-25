@@ -38,11 +38,14 @@ class PublishWordPressDraftJob implements ShouldQueue
         }
         $attempt = ((int) $item->runs()->where('stage', 'wordpress_publish')->max('attempt')) + 1;
         $run = $item->runs()->create(['stage' => 'wordpress_publish', 'attempt' => max(1, $attempt), 'status' => 'running', 'payload' => []]);
+        $status = 'draft';
         try {
-            $post = $publisher->publish($item->fresh(), $connection);
-            $run->forceFill(['status' => 'succeeded', 'payload' => ['post_id' => $post['id'] ?? null, 'status' => 'draft']])->save();
+            $item->loadMissing('batch.task');
+            $status = in_array($item->batch?->task?->publish_status, ['draft', 'pending', 'publish'], true) ? $item->batch->task->publish_status : 'draft';
+            $post = $publisher->publish($item->fresh(), $connection, $status);
+            $run->forceFill(['status' => 'succeeded', 'payload' => ['post_id' => $post['id'] ?? null, 'url' => $post['link'] ?? null, 'status' => $post['status'] ?? $status, 'requested_status' => $status]])->save();
         } catch (Throwable $exception) {
-            $run->forceFill(['status' => 'failed', 'error_message' => $exception->getMessage(), 'payload' => ['exception' => $exception::class]])->save();
+            $run->forceFill(['status' => 'failed', 'error_message' => $exception->getMessage(), 'payload' => ['exception' => $exception::class, 'requested_status' => $status ?? 'draft', 'retryable' => true]])->save();
             $fresh = $item->fresh();
             if (ContentStateTransition::canTransition((string) $fresh->state, ContentState::RETRYABLE_FAILED)) {
                 $fresh->forceFill(['state' => ContentState::RETRYABLE_FAILED])->save();

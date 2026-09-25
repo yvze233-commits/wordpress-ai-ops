@@ -3,6 +3,7 @@
 namespace App\Domain\Topics;
 
 use App\Domain\Content\IdempotencyKey;
+use App\Domain\Skills\SkillCatalog;
 use App\Models\ContentBatch;
 use App\Models\ContentItem;
 use App\Models\DailySelection;
@@ -16,6 +17,7 @@ final class TopicSelectionService
     public function __construct(
         private readonly DuplicateDetector $duplicates = new DuplicateDetector,
         private readonly TopicLockService $locks = new TopicLockService,
+        private readonly SkillCatalog $skills = new SkillCatalog,
     ) {}
 
     public function selectForBatch(ContentBatch $batch, int $limit): Collection
@@ -24,7 +26,10 @@ final class TopicSelectionService
             return collect();
         }
 
-        $this->syncTitleLibraryCandidates();
+        $topicSourceMode = $this->topicSourceMode($batch);
+        if ($topicSourceMode !== 'hot') {
+            $this->syncTitleLibraryCandidates();
+        }
         $existingIds = DailySelection::query()
             ->where('content_batch_id', $batch->id)
             ->pluck('topic_candidate_id');
@@ -36,6 +41,16 @@ final class TopicSelectionService
                     ->orWhere(function ($query): void {
                         $query->where('status', 'locked')->where('locked_until', '<', now());
                     });
+            })
+            ->when($topicSourceMode === 'hot', fn ($query) => $query->whereIn('source_type', ['rss', 'atom', 'json', 'json_api', 'api', 'html']))
+            ->when($topicSourceMode === 'titles', fn ($query) => $query->where('source_type', 'title_library'))
+            ->when($topicSourceMode === 'titles', function ($query): void {
+                $query->whereExists(function ($subquery): void {
+                    $subquery->selectRaw('1')
+                        ->from('title_library_entries')
+                        ->where('title_library_entries.enabled', true)
+                        ->whereRaw("title_library_entries.id = CAST(SUBSTR(topic_candidates.source_key, 15) AS INTEGER)");
+                });
             })
             ->whereNotIn('id', $existingIds)
             ->get()
@@ -83,6 +98,7 @@ final class TopicSelectionService
     {
         DB::transaction(function () use ($batch, $candidate, $score): void {
             $titleEntry = $this->titleEntry($candidate);
+            $skillSnapshots = $this->skills->snapshotsForNewContent();
             $contentItem = ContentItem::query()->firstOrCreate(
                 ['idempotency_key' => IdempotencyKey::forTopic($candidate->id, 'batch:'.$batch->id, 0)],
                 [
@@ -90,6 +106,8 @@ final class TopicSelectionService
                     'topic_candidate_id' => $candidate->id,
                     'title' => $candidate->title,
                     'state' => 'locked',
+                    'writing_skill_snapshot' => $skillSnapshots['writing'],
+                    'review_skill_snapshot' => $skillSnapshots['review'],
                 ],
             );
 
@@ -139,5 +157,17 @@ final class TopicSelectionService
         }
 
         return TitleLibraryEntry::query()->find((int) substr($candidate->source_key, strlen('title_library:')));
+    }
+
+    private function topicSourceMode(ContentBatch $batch): string
+    {
+        $task = $batch->relationLoaded('task') ? $batch->task : $batch->task()->first();
+        $mode = is_array($task?->settings) ? (string) ($task->settings['topic_source_mode'] ?? '') : '';
+
+        return match ($mode) {
+            '仅热点', 'hot', 'hot_only' => 'hot',
+            '仅标题库', 'titles', 'title_library', 'title_only' => 'titles',
+            default => 'all',
+        };
     }
 }

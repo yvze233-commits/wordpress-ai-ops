@@ -15,6 +15,9 @@ return [
     'topic_source_connect_timeout' => (int) env('TOPIC_SOURCE_CONNECT_TIMEOUT', 10),
     'topic_source_max_response_bytes' => (int) env('TOPIC_SOURCE_MAX_RESPONSE_BYTES', 4 * 1024 * 1024),
     'topic_source_max_attempts' => (int) env('TOPIC_SOURCE_MAX_ATTEMPTS', 3),
+    'hot_topic_sources' => [
+        ['name' => 'Google 新闻教育聚合', 'type' => 'rss', 'url' => 'https://news.google.com/rss/search?q={keywords}&hl=zh-CN&gl=CN&ceid=CN:zh-Hans', 'trust_score' => 70],
+    ],
     'knowledge_max_document_bytes' => (int) env('KNOWLEDGE_MAX_DOCUMENT_BYTES', 5 * 1024 * 1024),
     'knowledge_chunk_max_chars' => (int) env('KNOWLEDGE_CHUNK_MAX_CHARS', 1400),
     'image_match_min_confidence' => (float) env('IMAGE_MATCH_MIN_CONFIDENCE', 0.46),

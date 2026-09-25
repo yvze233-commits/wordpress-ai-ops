@@ -1,2 +1,8 @@
-@extends('admin.layout', ['title' => '批次'])
-@section('content')<h1>批次</h1><ul>@foreach ($batches as $batch)<li><a href="{{ route('admin.batches.show', $batch) }}">{{ $batch->run_date->toDateString() }}</a> · {{ $batch->status }} · {{ $batch->completed_count }}/{{ $batch->target_count }}</li>@endforeach</ul>{{ $batches->links() }}@endsection
+@extends('admin.layout', ['title' => '运行记录'])
+@section('content')
+@php($batchStatusLabels = ['planned' => '已计划', 'completed' => '已完成', 'shortfall' => '选题不足', 'paused' => '已暂停'])
+<div class="page-heading"><div><div class="eyebrow">任务运行记录</div><h1>运行记录</h1><p class="subtitle">查看每个任务每天的选题、生成进度和失败重试项。</p></div></div>
+@if(session('status'))<div class="notice">{{ session('status') }}</div>@endif
+<section class="panel"><div class="panel-header"><div><h2>手动创建运行记录</h2><p>任务模式会按计划自动创建；这里用于临时补跑。</p></div></div><div class="panel-body"><form method="post" action="{{ route('admin.batches.store') }}" class="actions">@csrf<input type="date" name="run_date" value="{{ now()->toDateString() }}" required><input type="number" name="target_count" min="1" max="20" value="4"><button class="button" type="submit">创建运行记录</button></form></div></section>
+<section class="panel" style="margin-top:19px"><div class="panel-header"><div><h2>运行列表</h2><p>已创建 {{ $batches->total() }} 条运行记录</p></div></div><div class="panel-body table-wrap"><table><thead><tr><th>日期</th><th>状态</th><th>选题</th><th>操作</th></tr></thead><tbody>@forelse($batches as $batch)<tr><td><a href="{{ route('admin.batches.show', $batch) }}"><strong>{{ $batch->run_date->toDateString() }}</strong></a></td><td><span class="badge {{ $batch->status === 'shortfall' ? 'amber' : 'teal' }}">{{ $batchStatusLabels[$batch->status] ?? $batch->status }}</span></td><td>{{ $batch->completed_count }}/{{ $batch->target_count }}</td><td><a class="button ghost" href="{{ route('admin.batches.show', $batch) }}">查看详情</a></td></tr>@empty<tr><td colspan="4" class="empty">暂无运行记录。</td></tr>@endforelse</tbody></table>{{ $batches->links() }}</div></section>
+@endsection

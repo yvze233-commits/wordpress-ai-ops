@@ -13,7 +13,7 @@ final class ContentStateTransition
         ContentState::GENERATING => [ContentState::AWAITING_REVIEW, ContentState::RETRYABLE_FAILED, ContentState::PERMANENTLY_FAILED],
         ContentState::AWAITING_REVIEW => [ContentState::APPROVED, ContentState::NEEDS_MANUAL_REVIEW, ContentState::RETRYABLE_FAILED],
         ContentState::NEEDS_MANUAL_REVIEW => [ContentState::APPROVED, ContentState::RETRYABLE_FAILED, ContentState::PERMANENTLY_FAILED],
-        ContentState::APPROVED => [ContentState::WP_DRAFT_WRITTEN, ContentState::RETRYABLE_FAILED, ContentState::PERMANENTLY_FAILED],
+        ContentState::APPROVED => [ContentState::WP_DRAFT_WRITTEN, ContentState::PUBLISHED, ContentState::RETRYABLE_FAILED, ContentState::PERMANENTLY_FAILED],
         ContentState::RETRYABLE_FAILED => [ContentState::LOCKED, ContentState::GENERATING, ContentState::APPROVED, ContentState::PERMANENTLY_FAILED],
         ContentState::WP_DRAFT_WRITTEN => [ContentState::PUBLISHED],
         ContentState::PUBLISHED => [],

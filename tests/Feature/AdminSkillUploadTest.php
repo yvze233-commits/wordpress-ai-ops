@@ -17,7 +17,11 @@ class AdminSkillUploadTest extends TestCase
     public function test_builtin_catalog_can_be_seeded_and_user_skill_is_immediately_enabled(): void
     {
         app(SkillCatalog::class)->seedBuiltIns();
-        $this->assertSame(9, Skill::query()->count());
+        $this->assertSame(13, Skill::query()->count());
+        $this->assertDatabaseHas('skills', ['slug' => 'geoflow_impression_article', 'source' => 'built_in']);
+        $this->assertDatabaseHas('skills', ['slug' => 'geoflow_ranking_article', 'source' => 'built_in']);
+        $this->assertDatabaseHas('skills', ['slug' => 'geoflow_review_facts', 'source' => 'built_in']);
+        $this->assertDatabaseHas('skills', ['slug' => 'geoflow_review_publish', 'source' => 'built_in']);
         $response = $this->postJson('/admin/skills', [
             'name' => '教育原创写作',
             'kind' => 'writing',

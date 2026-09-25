@@ -63,7 +63,13 @@ final class WordPressRestClient
     /** @return array<string,mixed> */
     public function createDraft(WordPressConnection $connection, array $payload): array
     {
-        $payload['status'] = 'draft';
+        return $this->createPost($connection, [...$payload, 'status' => 'draft']);
+    }
+
+    /** @param array<string,mixed> $payload */
+    public function createPost(WordPressConnection $connection, array $payload): array
+    {
+        $payload['status'] = $this->postStatus($payload['status'] ?? 'draft');
 
         return $this->decode($this->send($this->requests->make($connection), 'post', $this->requests->endpoint($connection, '/posts'), $payload));
     }
@@ -71,9 +77,24 @@ final class WordPressRestClient
     /** @return array<string,mixed> */
     public function updatePost(WordPressConnection $connection, int $postId, array $payload): array
     {
-        $payload['status'] = 'draft';
+        $payload['status'] = $this->postStatus($payload['status'] ?? 'draft');
 
         return $this->decode($this->send($this->requests->make($connection), 'post', $this->requests->endpoint($connection, '/posts/'.$postId), $payload));
+    }
+
+    /** @return array{user:array<string,mixed>,categories:int,tags:int} */
+    public function diagnostics(WordPressConnection $connection): array
+    {
+        return [
+            'user' => $this->health($connection),
+            'categories' => count($this->categories($connection)),
+            'tags' => count($this->tags($connection)),
+        ];
+    }
+
+    private function postStatus(mixed $status): string
+    {
+        return in_array($status, ['draft', 'pending', 'publish'], true) ? $status : 'draft';
     }
 
     /** @return list<array<string,mixed>> */

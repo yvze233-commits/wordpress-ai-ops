@@ -82,6 +82,25 @@ final class KnowledgeRetrievalService
             return [];
         }
 
-        return array_values(array_unique(array_filter(preg_split('/[\s,，。.!?！？、:：;；]+/u', $query) ?: [])));
+        $parts = array_values(array_filter(array_map('trim', preg_split('/[\s,，。.!?！？、:：;；]+/u', $query) ?: [])));
+        $terms = [];
+        foreach ($parts as $part) {
+            if (preg_match('/[\x{4e00}-\x{9fff}]/u', $part) !== 1) {
+                $terms[] = $part;
+                continue;
+            }
+
+            // Chinese titles do not have word boundaries; use short n-grams so
+            // a title such as "线上雅思课程" can match knowledge chunks that
+            // mention "雅思课程" or "线上课程".
+            $length = mb_strlen($part, 'UTF-8');
+            for ($size = 2; $size <= min(4, $length); $size++) {
+                for ($offset = 0; $offset <= $length - $size; $offset++) {
+                    $terms[] = mb_substr($part, $offset, $size, 'UTF-8');
+                }
+            }
+        }
+
+        return array_values(array_unique(array_filter($terms, static fn (string $term): bool => mb_strlen($term, 'UTF-8') >= 2)));
     }
 }

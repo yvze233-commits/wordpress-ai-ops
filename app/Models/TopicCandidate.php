@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasMany as HasManyRelation;
 
 class TopicCandidate extends Model
 {
@@ -43,5 +44,10 @@ class TopicCandidate extends Model
     public function dailySelections(): HasMany
     {
         return $this->hasMany(DailySelection::class);
+    }
+
+    public function titleCandidates(): HasManyRelation
+    {
+        return $this->hasMany(TopicTitleCandidate::class);
     }
 }

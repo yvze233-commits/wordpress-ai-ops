@@ -54,6 +54,20 @@ class TopicCollectionTest extends TestCase
         $this->assertDatabaseHas('audit_events', ['event_type' => 'topic_source_collected']);
     }
 
+    public function test_source_preview_returns_first_five_parsed_items_without_writing_candidates(): void
+    {
+        Http::fake(['https://example.test/feed.xml' => Http::response(<<<'XML'
+            <rss><channel><item><guid>preview-1</guid><title>热点一</title><link>https://example.test/1</link></item></channel></rss>
+            XML, 200)]);
+        $source = TopicSource::create(['name' => '预览源', 'type' => 'rss', 'url' => 'https://example.test/feed.xml']);
+
+        $this->postJson("/admin/sources/{$source->id}/preview")
+            ->assertOk()
+            ->assertJsonPath('data.0.title', '热点一');
+        $this->assertDatabaseCount('topic_candidates', 0);
+        $this->assertDatabaseCount('topic_feeds', 0);
+    }
+
     public function test_disabled_sources_exit_without_an_http_request(): void
     {
         Http::fake();

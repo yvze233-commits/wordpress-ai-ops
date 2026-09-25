@@ -8,6 +8,7 @@ use App\Domain\Media\ContentImageRenderer;
 use App\Domain\Media\ContentItemDraft;
 use App\Domain\Media\ImageMatchingService;
 use App\Models\ContentItem;
+use App\Models\KnowledgeBase;
 use App\Models\LibraryImage;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -82,7 +83,15 @@ final class ArticleGenerationService
             'slug' => trim((string) $result['slug']) ?: Str::slug((string) $result['title']),
             'excerpt' => trim((string) $result['excerpt']),
             'content_html' => $html,
-            'generation_meta' => [...($item->generation_meta ?? []), 'image_plan' => $plan->placements(), 'revision_at' => now()->toIso8601String()],
+            'generation_meta' => [
+                ...($item->generation_meta ?? []),
+                'keywords' => array_values(array_filter((array) $result['keywords'], 'is_string')),
+                'category' => (string) $result['category'],
+                'source_links' => array_values(array_filter((array) $result['source_links'], 'is_string')),
+                'claims' => array_values(array_filter((array) $result['claims'], 'is_string')),
+                'image_plan' => $plan->placements(),
+                'revision_at' => now()->toIso8601String(),
+            ],
         ])->save();
         $this->images->persist($item, $plan);
 
@@ -91,7 +100,7 @@ final class ArticleGenerationService
 
     private function evidence(ContentItem $item): EvidenceSnapshot
     {
-        if (is_array($item->evidence_snapshot) && isset($item->evidence_snapshot['evidence'])) {
+        if (is_array($item->evidence_snapshot) && ! empty($item->evidence_snapshot['evidence'])) {
             $snapshot = new EvidenceSnapshot($item->evidence_snapshot['evidence'], (string) ($item->evidence_snapshot['retrieved_at'] ?? now()->toIso8601String()));
             $snapshot->validate();
 
@@ -99,6 +108,10 @@ final class ArticleGenerationService
         }
 
         $ids = array_values(array_filter((array) ($item->generation_meta['knowledge_base_ids'] ?? config('content-ops.default_knowledge_base_ids', [])), 'is_numeric'));
+
+        if ($ids === []) {
+            $ids = KnowledgeBase::query()->where('enabled', true)->pluck('id')->map(fn (mixed $id): int => (int) $id)->all();
+        }
 
         return $this->knowledge->retrieve($item->title.' '.($item->topicCandidate?->summary ?? ''), array_map('intval', $ids));
     }

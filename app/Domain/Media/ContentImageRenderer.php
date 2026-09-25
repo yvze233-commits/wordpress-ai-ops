@@ -21,13 +21,13 @@ final class ContentImageRenderer
             if (! $image instanceof LibraryImage) {
                 continue;
             }
-            $alt = e($image->alt_text ?: $image->caption ?: $image->notes ?: 'Article image');
+            $alt = e($image->alt_text ?: $image->caption ?: $image->notes ?: '文章配图');
             $caption = trim((string) ($image->caption ?? ''));
             $captionHtml = $caption === '' ? '' : '<figcaption>'.e($caption).'</figcaption>';
             $blocks[] = [
                 'placement' => (int) ($placement['position'] ?? count($blocks)),
                 'paragraph_index' => $placement['paragraph_index'],
-                'html' => '<figure data-content-image-placement="'.(int) $placement['position'].'"><img src="'.e($image->path).'" alt="'.$alt.'" loading="lazy">'.$captionHtml.'</figure>',
+                'html' => '<figure data-content-image-placement="'.(int) $placement['position'].'"><img src="'.e(route('media.images.show', $image)).'" alt="'.$alt.'" loading="lazy">'.$captionHtml.'</figure>',
             ];
         }
 

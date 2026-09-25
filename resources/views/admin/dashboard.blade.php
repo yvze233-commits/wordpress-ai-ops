@@ -21,11 +21,12 @@
 @section('content')
     <div class="page-heading">
         <div>
-            <div class="eyebrow">Content operations</div>
+            <div class="eyebrow">内容运营</div>
             <h1>运营概览</h1>
             <p class="subtitle">查看今天的内容生产进度，以及需要人工处理的事项。</p>
         </div>
         <div class="actions">
+            <a class="button ghost" href="{{ route('admin.tasks.index') }}">管理任务</a>
             <a class="button ghost" href="{{ route('admin.knowledge.index') }}">管理资产</a>
             <a class="button" href="{{ route('admin.reviews.index') }}">查看审核队列 <span aria-hidden="true">→</span></a>
         </div>
@@ -57,17 +58,6 @@
 
     <div class="workspace-grid">
         <div class="stack">
-            @if ($alerts !== [])
-                <section class="panel">
-                    <div class="panel-header"><div><h2>告警</h2><p>需要关注的生产与连接问题</p></div><span class="badge red">{{ count($alerts) }} 项</span></div>
-                    <div class="panel-body asset-list">
-                        @foreach ($alerts as $alert)
-                            <div class="asset"><span class="asset-mark" style="{{ $alert['level'] === 'red' ? 'color:#a64641;background:#fbe8e7' : 'color:#8a6217;background:#fff3d3' }}">{{ $alert['level'] === 'red' ? '!' : '⚠' }}</span><span class="asset-copy"><strong>{{ $alert['title'] }}</strong><small>{{ $alert['detail'] }}</small></span></div>
-                        @endforeach
-                    </div>
-                </section>
-            @endif
-
             <section class="panel">
                 <div class="panel-header"><div><h2>内容流水线</h2><p>从选题到 WordPress 的自动化路径</p></div><span class="badge teal">自动运行</span></div>
                 <div class="panel-body">
@@ -97,41 +87,11 @@
 
         <div class="stack">
             <section class="panel">
-                <div class="panel-header"><div><h2>每日运行报表</h2><p>今天与最近 7 天的生产数据</p></div></div>
-                <div class="panel-body">
-                    <div class="stat-grid" style="grid-template-columns:repeat(5,minmax(0,1fr));gap:9px;margin-bottom:13px">
-                        <div class="stat" style="padding:11px 12px"><strong style="margin:0">{{ $report['generated'] }}</strong><small>生成</small></div>
-                        <div class="stat" style="padding:11px 12px"><strong style="margin:0">{{ $report['approved'] }}</strong><small>审核通过</small></div>
-                        <div class="stat" style="padding:11px 12px"><strong style="margin:0">{{ $report['manual'] }}</strong><small>人工复核</small></div>
-                        <div class="stat" style="padding:11px 12px"><strong style="margin:0">{{ $report['drafted'] }}</strong><small>草稿/发布</small></div>
-                        <div class="stat" style="padding:11px 12px"><strong style="margin:0">{{ $report['failed'] }}</strong><small>失败</small></div>
-                    </div>
-                    <div class="table-wrap">
-                        <table>
-                            <thead><tr><th>日期</th><th>生成</th><th>通过</th><th>复核</th><th>草稿</th><th>失败</th></tr></thead>
-                            <tbody>
-                            @foreach ($reportHistory as $row)
-                                <tr>
-                                    <td>{{ \Illuminate\Support\Carbon::parse($row['date'])->format('m-d') }}</td>
-                                    <td>{{ $row['generated'] }}</td>
-                                    <td>{{ $row['approved'] }}</td>
-                                    <td>{{ $row['manual'] }}</td>
-                                    <td>{{ $row['drafted'] }}</td>
-                                    <td>@if ($row['failed'] > 0) <span class="badge red">{{ $row['failed'] }}</span> @else <span class="badge gray">0</span> @endif</td>
-                                </tr>
-                            @endforeach
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </section>
-
-            <section class="panel">
                 <div class="panel-header"><div><h2>资产状态</h2><p>生成文章会按需读取这些内容</p></div></div>
                 <div class="panel-body asset-list">
                     <a class="asset" href="{{ route('admin.knowledge.index') }}"><span class="asset-mark">▤</span><span class="asset-copy"><strong>知识库</strong><small>{{ $knowledgeCount }} 个库 · {{ $knowledgeDocuments }} 份资料</small></span><span class="asset-count">{{ $knowledgeCount }}</span></a>
                     <a class="asset" href="{{ route('admin.images.index') }}"><span class="asset-mark">▧</span><span class="asset-copy"><strong>图片库</strong><small>{{ $imageLibraryCount }} 个库 · {{ $imageCount }} 张图片</small></span><span class="asset-count">{{ $imageCount }}</span></a>
-                    <a class="asset" href="{{ route('admin.skills.index') }}"><span class="asset-mark">✦</span><span class="asset-copy"><strong>Skills</strong><small>{{ $enabledSkillCount }} 个启用 · 写作与审核可选</small></span><span class="asset-count">{{ $skillCount }}</span></a>
+                    <a class="asset" href="{{ route('admin.skills.index') }}"><span class="asset-mark">✦</span><span class="asset-copy"><strong>写作规则</strong><small>{{ $enabledSkillCount }} 个启用 · 写作与审核可选</small></span><span class="asset-count">{{ $skillCount }}</span></a>
                 </div>
             </section>
 

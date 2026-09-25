@@ -17,7 +17,7 @@ final class WordPressDraftPublisher
     ) {}
 
     /** @return array<string,mixed> */
-    public function publish(ContentItem $item, WordPressConnection $connection): array
+    public function publish(ContentItem $item, WordPressConnection $connection, string $status = 'draft'): array
     {
         if ($item->state !== ContentState::APPROVED && $item->state !== ContentState::WP_DRAFT_WRITTEN) {
             throw new \InvalidArgumentException('Only approved content can be written to a WordPress draft.');
@@ -27,27 +27,29 @@ final class WordPressDraftPublisher
         $mediaUrls = $this->media->uploadSelected($connection, $item);
         $html = $this->rewriteImages((string) $item->content_html, $mediaUrls);
         $taxonomies = $this->taxonomy->resolve($connection, $item->generation_meta['category'] ?? null, $item->generation_meta['keywords'] ?? []);
+        $status = in_array($status, ['draft', 'pending', 'publish'], true) ? $status : 'draft';
         $payload = [
             'title' => $item->title,
             'slug' => $item->slug,
             'excerpt' => $item->excerpt,
             'content' => $html,
-            'status' => 'draft',
+            'status' => $status,
             'categories' => $taxonomies['categories'],
             'tags' => $taxonomies['tags'],
             'meta' => ['content_ops_idempotency_key' => $marker],
         ];
         $post = $remote !== null && isset($remote['id'])
             ? $this->client->updatePost($connection, (int) $remote['id'], $payload)
-            : $this->client->createDraft($connection, $payload);
+            : $this->client->createPost($connection, $payload);
 
-        DB::transaction(function () use ($item, $post, $marker): void {
+        DB::transaction(function () use ($item, $post, $marker, $status): void {
             $fresh = $item->fresh();
-            if ($fresh->state !== ContentState::WP_DRAFT_WRITTEN) {
-                ContentStateTransition::assertAllowed((string) $fresh->state, ContentState::WP_DRAFT_WRITTEN);
+            $nextState = $status === 'publish' ? ContentState::PUBLISHED : ContentState::WP_DRAFT_WRITTEN;
+            if ($fresh->state !== $nextState) {
+                ContentStateTransition::assertAllowed((string) $fresh->state, $nextState);
             }
-            $fresh->forceFill(['wordpress_post_id' => (int) ($post['id'] ?? 0), 'wordpress_url' => $post['link'] ?? null, 'state' => ContentState::WP_DRAFT_WRITTEN])->save();
-            $fresh->auditEvents()->create(['event_type' => 'wordpress_draft_written', 'payload' => ['post_id' => $post['id'] ?? null, 'idempotency_key' => $marker]]);
+            $fresh->forceFill(['wordpress_post_id' => (int) ($post['id'] ?? 0), 'wordpress_url' => $post['link'] ?? null, 'state' => $nextState])->save();
+            $fresh->auditEvents()->create(['event_type' => $status === 'publish' ? 'wordpress_published' : 'wordpress_draft_written', 'payload' => ['post_id' => $post['id'] ?? null, 'status' => $status, 'idempotency_key' => $marker]]);
         });
 
         return $post;

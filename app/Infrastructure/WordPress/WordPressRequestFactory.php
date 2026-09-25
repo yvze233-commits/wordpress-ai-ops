@@ -22,6 +22,9 @@ final class WordPressRequestFactory
             throw new InvalidArgumentException('WordPress connections must use HTTPS outside local/testing environments.');
         }
 
+        // Admin users commonly paste the dashboard URL. Normalize it to the
+        // site root before appending the REST endpoint.
+        $url = preg_replace('#/(?:wp-admin(?:/index\.php)?|wp-login\.php)$#i', '', $url) ?: $url;
         $url = preg_replace('#/wp-json(?:/wp/v2)?$#i', '', $url) ?: $url;
 
         return $url.'/wp-json/wp/v2';

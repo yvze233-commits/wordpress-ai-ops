@@ -13,8 +13,8 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withCommands([__DIR__.'/../app/Console/Commands'])
     ->withSchedule(function (Schedule $schedule): void {
-        $schedule->command('content-ops:create-daily-batch')->dailyAt('02:00')->timezone(config('app.timezone'));
-        $schedule->command('content-ops:reconcile-runs')->hourly()->timezone(config('app.timezone'));
+        $schedule->command('content-ops:create-daily-batch')->everyMinute()->withoutOverlapping(10)->timezone(config('app.timezone'));
+        $schedule->command('content-ops:reconcile-runs')->hourly()->withoutOverlapping(10)->timezone(config('app.timezone'));
     })
     ->withMiddleware(static function (Middleware $middleware): void {})
     ->withExceptions(static function (Exceptions $exceptions): void {})

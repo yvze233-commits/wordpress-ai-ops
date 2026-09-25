@@ -115,6 +115,15 @@
         .settings-grid-compact { margin-top: 19px; }
         .settings-section { min-width: 0; }
         .ai-workspace { margin-bottom: 19px; }
+        .ai-role-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 19px; }
+        .ai-role-card { min-width: 0; }
+        .role-card-header { min-height: 116px; align-items: flex-start; }
+        .role-card-header h2 { font-size: 20px; }
+        .role-form { display: grid; gap: 15px; }
+        .model-picker { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 9px; }
+        .fetch-models { min-height: 38px; white-space: nowrap; }
+        .role-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-top: 2px; }
+        .model-status { color: var(--muted); font-size: 11px; }
         .ai-workspace-heading { align-items: flex-start; }
         .ai-workspace-heading h2 { margin-bottom: 4px; font-size: 20px; }
         .routing-panel { margin-top: 19px; }
@@ -154,7 +163,9 @@
         .settings-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 19px; }
         .actions { display: flex; flex-wrap: wrap; gap: 8px; }
         .pagination { margin-top: 18px; }
-        @media (max-width: 1050px) { .sidebar { width: 190px; flex-basis: 190px; } .content { padding: 25px 22px 45px; } .topbar { padding: 0 22px; } .workspace-grid, .settings-grid, .ai-connection-grid, .connection-form { grid-template-columns: 1fr; } }
+        .image-strip { display: flex; gap: 5px; min-width: 130px; }
+        .image-strip img { display: block; object-fit: cover; border-radius: 4px; border: 1px solid var(--line); background: #eef2f2; }
+        @media (max-width: 1050px) { .sidebar { width: 190px; flex-basis: 190px; } .content { padding: 25px 22px 45px; } .topbar { padding: 0 22px; } .workspace-grid, .settings-grid, .ai-role-grid, .ai-connection-grid, .connection-form { grid-template-columns: 1fr; } }
         @media (max-width: 720px) { .app-shell { display: block; } .sidebar { width: auto; padding: 12px 13px; } .brand { padding: 3px 8px 12px; } .nav-label, .sidebar-note { display: none; } .nav { grid-template-columns: repeat(5, minmax(0, 1fr)); margin: 0; gap: 3px; } .nav a { justify-content: center; min-height: 34px; padding: 0 5px; font-size: 0; } .nav-icon { font-size: 15px; } .topbar { height: 55px; padding: 0 16px; } .topbar-right span { display: none; } .content { padding: 22px 15px 35px; } .page-heading { display: block; } .page-heading .button { margin-top: 15px; } h1 { font-size: 23px; } .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .pipeline { grid-template-columns: repeat(2, minmax(0, 1fr)); } .pipeline-step:not(:last-child)::after { display: none; } .panel-body, .panel-header { padding: 16px; } .article { padding: 20px; } .form-grid, .task-row, .connection-row { grid-template-columns: 1fr; } .connection-head { display: none; } .task-mark { display: none; } .check-field { padding-top: 0; } }
     </style>
 </head>
@@ -168,18 +179,19 @@
         <div class="nav-label">工作台</div>
         <nav class="nav">
             <a class="{{ request()->routeIs('admin.dashboard') ? 'active' : '' }}" href="{{ route('admin.dashboard') }}"><span class="nav-icon">⌂</span><span>运营概览</span></a>
-            <a class="{{ request()->routeIs('admin.batches.*') ? 'active' : '' }}" href="{{ route('admin.batches.index') }}"><span class="nav-icon">▦</span><span>内容批次</span></a>
-            <a class="{{ request()->routeIs('admin.reviews.*') ? 'active' : '' }}" href="{{ route('admin.reviews.index') }}"><span class="nav-icon">✓</span><span>文章审核</span></a>
+            <a class="{{ request()->routeIs('admin.batches.*') ? 'active' : '' }}" href="{{ route('admin.batches.index') }}"><span class="nav-icon">▦</span><span>运行记录</span>@if(($navCounts['failed'] ?? 0) > 0)<span class="badge red">{{ $navCounts['failed'] }}</span>@endif</a>
+            <a class="{{ request()->routeIs('admin.tasks.*') ? 'active' : '' }}" href="{{ route('admin.tasks.index') }}"><span class="nav-icon">◫</span><span>任务模式</span></a>
+            <a class="{{ request()->routeIs('admin.reviews.*') ? 'active' : '' }}" href="{{ route('admin.reviews.index') }}"><span class="nav-icon">✓</span><span>文章审核</span>@if(($navCounts['reviews'] ?? 0) > 0)<span class="badge amber">{{ $navCounts['reviews'] }}</span>@endif</a>
             <a class="{{ request()->routeIs('admin.wordpress.*') ? 'active' : '' }}" href="{{ route('admin.wordpress.index') }}"><span class="nav-icon">↗</span><span>发布连接</span></a>
             <a class="{{ request()->routeIs('admin.settings.*') ? 'active' : '' }}" href="{{ route('admin.settings.index') }}"><span class="nav-icon">⚙</span><span>系统配置</span></a>
         </nav>
         <div class="nav-label">资产配置</div>
         <nav class="nav">
-            <a class="{{ request()->routeIs('admin.sources.*') ? 'active' : '' }}" href="{{ route('admin.sources.index') }}"><span class="nav-icon">◌</span><span>热点来源</span></a>
+            <a class="{{ request()->routeIs('admin.sources.*') ? 'active' : '' }}" href="{{ route('admin.sources.index') }}"><span class="nav-icon">◌</span><span>热点来源</span>@if(($navCounts['source_errors'] ?? 0) > 0)<span class="badge red">{{ $navCounts['source_errors'] }}</span>@endif</a>
             <a class="{{ request()->routeIs('admin.titles.*') ? 'active' : '' }}" href="{{ route('admin.titles.index') }}"><span class="nav-icon">≡</span><span>标题库</span></a>
             <a class="{{ request()->routeIs('admin.knowledge.*') ? 'active' : '' }}" href="{{ route('admin.knowledge.index') }}"><span class="nav-icon">▤</span><span>知识库</span></a>
             <a class="{{ request()->routeIs('admin.images.*') ? 'active' : '' }}" href="{{ route('admin.images.index') }}"><span class="nav-icon">▧</span><span>图片库</span></a>
-            <a class="{{ request()->routeIs('admin.skills.*') ? 'active' : '' }}" href="{{ route('admin.skills.index') }}"><span class="nav-icon">✦</span><span>Skills</span></a>
+            <a class="{{ request()->routeIs('admin.skills.*') ? 'active' : '' }}" href="{{ route('admin.skills.index') }}"><span class="nav-icon">✦</span><span>写作规则</span></a>
         </nav>
         <div class="sidebar-note"><strong>自动发布已就绪</strong>每日目标 {{ $data['daily_target'] ?? 4 }} 篇，审核通过后写入 WordPress 草稿。</div>
     </aside>

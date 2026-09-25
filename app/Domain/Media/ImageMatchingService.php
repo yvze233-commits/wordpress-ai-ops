@@ -133,8 +133,8 @@ final class ImageMatchingService
             'image' => $image,
             'confidence' => round($score, 4),
             'reason' => $matches > 0
-                ? "Matched {$matches} annotated image term(s) in the article context."
-                : 'No annotated term match; image confidence is below the preferred semantic score.',
+                ? "正文匹配到 {$matches} 个图片备注关键词。"
+                : '没有找到图片备注中的匹配词，当前图片语义匹配度较低。',
         ];
     }
 

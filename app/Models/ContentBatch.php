@@ -7,12 +7,13 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ContentBatch extends Model
 {
-    protected $fillable = ['run_date', 'target_count', 'status', 'completed_count'];
+    protected $fillable = ['content_task_id', 'run_date', 'target_count', 'status', 'completed_count'];
 
     protected function casts(): array
     {
         return [
             'run_date' => 'date',
+            'content_task_id' => 'integer',
             'target_count' => 'integer',
             'completed_count' => 'integer',
             'created_at' => 'datetime',
@@ -33,5 +34,10 @@ class ContentBatch extends Model
     public function dailySelections(): HasMany
     {
         return $this->hasMany(DailySelection::class);
+    }
+
+    public function task(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(ContentTask::class, 'content_task_id');
     }
 }

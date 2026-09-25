@@ -38,7 +38,10 @@ abstract class AbstractTopicSourceConnector implements TopicSourceConnector
     {
         return Http::timeout((int) config('content-ops.topic_source_timeout', 30))
             ->connectTimeout((int) config('content-ops.topic_source_connect_timeout', 10))
-            ->accept('*/*');
+            ->withHeaders([
+                'User-Agent' => 'WordPress-AI-Ops/1.0 (+https://localhost; content topic reader)',
+                'Accept' => 'application/rss+xml, application/atom+xml, application/json, text/html;q=0.9, */*;q=0.8',
+            ]);
     }
 
     protected function scalar(mixed $value): ?string

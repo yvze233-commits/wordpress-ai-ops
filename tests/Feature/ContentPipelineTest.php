@@ -6,9 +6,13 @@ use App\Domain\Content\StructuredAiGateway;
 use App\Jobs\GenerateContentItemJob;
 use App\Jobs\ReviewContentItemJob;
 use App\Models\ContentItem;
+use App\Models\ContentBatch;
+use App\Models\ContentTask;
 use App\Models\ContentRun;
 use App\Models\TopicCandidate;
+use App\Models\WordPressConnection;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Bus;
 use Tests\TestCase;
 
 class ContentPipelineTest extends TestCase
@@ -30,6 +34,8 @@ class ContentPipelineTest extends TestCase
         $fresh = $item->fresh();
         $this->assertSame('approved', $fresh->state);
         $this->assertTrue($fresh->review_result['passed']);
+        $this->assertSame(2, $fresh->review_result['review_stages']);
+        $this->assertArrayHasKey('pass_1', $fresh->review_result['criterion_scores']);
         $this->assertSame(2, ContentRun::query()->count());
     }
 
@@ -44,6 +50,57 @@ class ContentPipelineTest extends TestCase
         $this->assertNotEmpty($item->fresh()->review_result['conflicts']);
     }
 
+    public function test_passed_review_queues_wordpress_publish_for_a_healthy_connection(): void
+    {
+        Bus::fake();
+        $task = ContentTask::create([
+            'name' => '自动发布任务', 'writing_skill_slug' => 'geoflow_impression_article',
+            'review_skill_slug' => 'geoflow_two_pass', 'publish_status' => 'publish', 'status' => 'running',
+            'settings' => ['require_images' => false, 'require_source_links' => false],
+        ]);
+        $batch = ContentBatch::create([
+            'content_task_id' => $task->id, 'run_date' => '2026-10-04', 'target_count' => 1, 'status' => 'completed',
+        ]);
+        $item = $this->item('awaiting_review');
+        $item->update(['content_batch_id' => $batch->id]);
+        $connection = WordPressConnection::create([
+            'name' => '健康站点', 'base_url' => 'https://wp.example.test', 'username' => 'admin',
+            'application_password_encrypted' => 'secret-password', 'status' => 'healthy',
+        ]);
+        $this->fakeGateway(['valid' => true, 'passed' => true]);
+
+        (new ReviewContentItemJob($item->id))->handle();
+
+        Bus::assertDispatched(\App\Jobs\PublishWordPressDraftJob::class, fn (\App\Jobs\PublishWordPressDraftJob $job): bool => $job->contentItemId === $item->id && $job->connectionId === $connection->id);
+        $this->assertDatabaseHas('audit_events', ['content_item_id' => $item->id, 'event_type' => 'wordpress_publish_queued']);
+    }
+
+    public function test_passed_review_uses_the_task_wordpress_connection_when_configured(): void
+    {
+        Bus::fake();
+        $taskConnection = WordPressConnection::create([
+            'name' => '任务站点', 'base_url' => 'https://task-wp.example.test', 'username' => 'admin',
+            'application_password_encrypted' => 'secret-password', 'status' => 'healthy',
+        ]);
+        WordPressConnection::create([
+            'name' => '其他站点', 'base_url' => 'https://other-wp.example.test', 'username' => 'admin',
+            'application_password_encrypted' => 'secret-password', 'status' => 'healthy',
+        ]);
+        $task = ContentTask::create([
+            'name' => '指定站点任务', 'writing_skill_slug' => 'geoflow_impression_article',
+            'review_skill_slug' => 'geoflow_two_pass', 'publish_status' => 'draft', 'wordpress_connection_id' => $taskConnection->id,
+            'settings' => ['require_images' => false, 'require_source_links' => false],
+        ]);
+        $batch = ContentBatch::create(['content_task_id' => $task->id, 'run_date' => '2026-10-05', 'target_count' => 1, 'status' => 'completed']);
+        $item = $this->item('awaiting_review');
+        $item->update(['content_batch_id' => $batch->id]);
+        $this->fakeGateway(['valid' => true, 'passed' => true]);
+
+        (new ReviewContentItemJob($item->id))->handle();
+
+        Bus::assertDispatched(\App\Jobs\PublishWordPressDraftJob::class, fn (\App\Jobs\PublishWordPressDraftJob $job): bool => $job->connectionId === $taskConnection->id);
+    }
+
     public function test_invalid_generation_output_is_retryable_and_never_reviewed(): void
     {
         $item = $this->item('locked');
@@ -54,6 +111,31 @@ class ContentPipelineTest extends TestCase
         $this->assertSame('retryable_failed', $item->fresh()->state);
         $this->assertSame(0, ContentRun::query()->where('stage', 'review')->count());
         $this->assertSame('failed', ContentRun::query()->first()->status);
+    }
+
+    public function test_task_requirements_route_missing_image_and_source_link_to_manual_review(): void
+    {
+        $task = ContentTask::create([
+            'name' => '严格内容任务', 'writing_skill_slug' => 'geoflow_impression_article',
+            'review_skill_slug' => 'geoflow_two_pass', 'status' => 'running',
+            'settings' => ['topic_source_mode' => 'both', 'require_images' => true, 'require_source_links' => true],
+        ]);
+        $batch = ContentBatch::create(['content_task_id' => $task->id, 'run_date' => '2026-10-02', 'target_count' => 1, 'status' => 'planned']);
+        $item = $this->item('awaiting_review');
+        $item->update([
+            'content_batch_id' => $batch->id,
+            'content_html' => '<p>没有来源链接或图片。</p>',
+            'generation_meta' => ['source_links' => []],
+            'review_skill_snapshot' => [...($item->review_skill_snapshot ?? []), 'requirements' => ['require_images' => true, 'require_source_links' => true]],
+        ]);
+        $this->fakeGateway(['valid' => true, 'passed' => true]);
+
+        (new ReviewContentItemJob($item->id))->handle();
+
+        $fresh = $item->fresh();
+        $this->assertSame('needs_manual_review', $fresh->state);
+        $this->assertNotEmpty($fresh->review_result['image_issues']);
+        $this->assertNotEmpty($fresh->review_result['missing_evidence']);
     }
 
     private function item(string $state): ContentItem
@@ -71,7 +153,14 @@ class ContentPipelineTest extends TestCase
             'idempotency_key' => uniqid('item-', true),
             'evidence_snapshot' => ['retrieved_at' => now()->toIso8601String(), 'evidence' => []],
             'writing_skill_snapshot' => ['skill_id' => 1, 'version' => 1, 'raw_text' => 'writing-rule-v1'],
-            'review_skill_snapshot' => ['skill_id' => 2, 'version' => 1, 'raw_text' => 'review-rule-v1', 'pass_threshold' => 70],
+            'review_skill_snapshot' => [
+                'strategy' => 'geoflow_two_pass',
+                'pass_threshold' => 70,
+                'stages' => [
+                    ['skill_id' => 2, 'version' => 1, 'raw_text' => 'review-rule-v1'],
+                    ['skill_id' => 3, 'version' => 1, 'raw_text' => 'review-rule-v2'],
+                ],
+            ],
         ]);
     }
 

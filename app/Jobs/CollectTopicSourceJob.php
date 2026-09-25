@@ -10,6 +10,7 @@ use App\Domain\Topics\TopicFingerprint;
 use App\Domain\Topics\TopicNormalizer;
 use App\Domain\Topics\TopicSourceConnector;
 use App\Domain\Topics\TopicSourceException;
+use App\Domain\Topics\TopicSourceConnectorFactory;
 use App\Models\AuditEvent;
 use App\Models\TopicCandidate;
 use App\Models\TopicFeed;
@@ -36,9 +37,10 @@ class CollectTopicSourceJob implements ShouldQueue
         return [10, 60, 300];
     }
 
-    public function handle(?DatabaseManager $database = null): int
+    public function handle(?DatabaseManager $database = null, ?TopicSourceConnectorFactory $connectors = null): int
     {
         $database ??= app(DatabaseManager::class);
+        $connectors ??= app(TopicSourceConnectorFactory::class);
         $source = TopicSource::query()->findOrFail($this->topicSourceId);
 
         if (! $source->enabled || $source->status === 'paused') {
@@ -46,7 +48,7 @@ class CollectTopicSourceJob implements ShouldQueue
         }
 
         try {
-            $items = $this->connector($source)->collect($source);
+            $items = $connectors->make($source)->collect($source);
         } catch (RequestException $exception) {
             return $this->handleRequestFailure($source, $exception);
         } catch (TopicSourceException $exception) {
@@ -132,16 +134,6 @@ class CollectTopicSourceJob implements ShouldQueue
         return $count;
     }
 
-    private function connector(TopicSource $source): TopicSourceConnector
-    {
-        return match (strtolower($source->type)) {
-            'rss', 'atom' => new RssTopicSourceConnector,
-            'json', 'json_api', 'api' => new JsonApiTopicSourceConnector,
-            'html' => new HtmlTopicSourceConnector,
-            default => throw new MalformedTopicSourceException("Unsupported topic source type [{$source->type}]."),
-        };
-    }
-
     private function handleRequestFailure(TopicSource $source, RequestException $exception): int
     {
         $status = $exception->response?->status();
@@ -166,7 +158,7 @@ class CollectTopicSourceJob implements ShouldQueue
     private function recordFailure(TopicSource $source, string $message, ?string $status = null, ?int $httpStatus = null): void
     {
         $source->forceFill(array_filter([
-            'status' => $status,
+            'status' => $status ?? 'error',
             'last_fetched_at' => now(),
             'last_http_status' => $httpStatus,
             'last_error' => $message,
